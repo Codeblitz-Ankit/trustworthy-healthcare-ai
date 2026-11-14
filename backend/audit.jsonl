@@ -1,1 +1,7 @@
 {"timestamp": "2026-11-13T19:30:57.319766+00:00", "query": "What is amoxicillin used for?", "status": "not_verified", "review_required": true, "latency_ms": 30002.2}
+{"timestamp": "2026-11-14T04:32:19.798798+00:00", "query": "What is amoxicillin used for?", "status": "not_verified", "review_required": true, "latency_ms": 24473.1}
+{"timestamp": "2026-11-14T04:38:13.781416+00:00", "query": "What is amoxicillin used for?", "status": "not_verified", "review_required": true, "latency_ms": 13464.0}
+{"timestamp": "2026-11-14T04:41:31.695785+00:00", "query": "What is amoxicillin used for?", "status": "not_verified", "review_required": false, "latency_ms": 11175.2}
+{"timestamp": "2026-11-14T04:42:23.712306+00:00", "query": "How much acetaminophen should I take at once?", "status": "not_verified", "review_required": true, "latency_ms": 14027.4}
+{"timestamp": "2026-11-14T04:43:30.446769+00:00", "query": "What is amoxicillin used for?", "status": "not_verified", "review_required": false, "latency_ms": 9371.2}
+{"timestamp": "2026-11-14T05:10:06.093381+00:00", "query": "What is amoxicillin used for?", "status": "verified", "review_required": false, "latency_ms": 17742.3}

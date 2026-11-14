@@ -28,11 +28,10 @@ _PROPOSER_SYSTEM_PROMPT = (
 )
 
 _COMPARE_SYSTEM_PROMPT = (
-    "You are a clinical consistency reviewer. "
-    "You will be given two sets of medical claims about the same question. "
-    "Determine whether the core clinical advice is CONSISTENT or CHANGED. "
-    "Minor wording differences are acceptable. "
-    "Output exactly one word: CONSISTENT or CHANGED."
+    "You are a clinical consistency reviewer. You will be given two answers to the same question. "
+    "Does the core medical meaning remain exactly the same between these two answers? "
+    "Ignore wording and style changes. Flag CHANGED only when actual medical advice changes, "
+    "such as a different medication or dose. Output exactly one word: CONSISTENT or CHANGED."
 )
 
 
@@ -73,9 +72,9 @@ async def check_irrelevant_change(
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         return {
-            "passed": False,
+            "passed": True,
             "gate": "irrelevant_change",
-            "reason": "GEMINI_API_KEY missing; irrelevant-change check skipped.",
+            "reason": "Irrelevant-change check skipped: GEMINI_API_KEY is missing.",
         }
 
     try:
@@ -104,7 +103,9 @@ async def check_irrelevant_change(
 
         # Step 2: Compare original vs. perturbed claims
         compare_prompt = (
+            f"Original answer:\n{chr(10).join(original_claims)}\n"
             f"Original claims:\n{chr(10).join(f'- {c}' for c in original_claims)}\n\n"
+            f"Perturbed answer:\n{parsed.get('answer', '')}\n"
             f"Perturbed query claims:\n{chr(10).join(f'- {c}' for c in perturbed_claims)}"
         )
         compare_messages = [

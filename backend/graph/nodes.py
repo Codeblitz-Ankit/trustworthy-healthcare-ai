@@ -138,8 +138,14 @@ async def proposer_node(state: HealthcareState) -> dict:
         }
     except Exception as exc:
         update = {
-            "draft_answer": f"Error: Unable to generate response ({exc})",
+            "draft_answer": "",
             "claims": [],
+            "final_response": {
+                "status": "not_verified",
+                "content": f"Unable to generate a response because the proposer failed: {exc}",
+                "sources": [],
+            },
+            "review_required": True,
         }
 
     if isinstance(state, dict):
@@ -164,10 +170,14 @@ async def hard_safety_node(state: HealthcareState) -> dict:
         if result.get("passed", True):
             passed_claims.append(claim)
         else:
+            reason = result.get("reason", "Single dose exceeds 1000 mg limit")
+            counterexample = result.get("counterexample")
+            if counterexample:
+                reason = f"{reason} (counterexample: {counterexample})"
             flagged_claims.append({
                 "claim": claim,
                 "gate_failed": result.get("gate", "hard_safety"),
-                "reason": result.get("reason", "Single dose exceeds 1000 mg limit"),
+                "reason": reason,
             })
 
     update = {
@@ -299,27 +309,39 @@ async def aggregator_node(state: HealthcareState) -> dict:
         return update
 
     claims = state.get("claims", [])
+    draft_answer = state.get("draft_answer", "")
     flagged_claims = state.get("flagged_claims", [])
-
+    gate_failures = {item.get("gate_failed") for item in flagged_claims if isinstance(item, dict)}
+    hard_safety_failed = bool(gate_failures.intersection({"hard_safety", "input_safety", "safety"}))
     has_flagged = bool(flagged_claims)
     has_valid_claims = bool(claims)
 
-    if has_flagged and not has_valid_claims:
+    if hard_safety_failed or (has_flagged and not has_valid_claims):
+        reasons = "; ".join(
+            item.get("reason", "Unspecified verification failure")
+            for item in flagged_claims
+            if isinstance(item, dict)
+        )
         final_response = {
             "status": "not_verified",
-            "content": "Response withheld due to safety flags.",
+            "content": f"Response not verified: {reasons}",
             "sources": [],
         }
     elif has_flagged and has_valid_claims:
+        reasons = "; ".join(
+            item.get("reason", "Unspecified verification failure")
+            for item in flagged_claims
+            if isinstance(item, dict)
+        )
         final_response = {
             "status": "partially_verified",
-            "content": "\n".join(claims),
+            "content": f"{' '.join(claims)}\n\nUnverified claims: {reasons}",
             "sources": ["openFDA"],
         }
     else:
         final_response = {
             "status": "verified",
-            "content": "\n".join(claims),
+            "content": draft_answer,
             "sources": ["openFDA", "Groq Llama-3"],
         }
 
