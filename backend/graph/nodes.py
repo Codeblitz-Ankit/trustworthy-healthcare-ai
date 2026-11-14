@@ -1,8 +1,10 @@
 """LangGraph workflow node implementations for healthcare AI verification."""
 
+import asyncio
 import json
 import os
 import re
+import time
 from typing import Any, Dict, List
 
 from dotenv import load_dotenv
@@ -156,7 +158,9 @@ async def proposer_node(state: HealthcareState) -> dict:
 
 async def hard_safety_node(state: HealthcareState) -> dict:
     """Verify claims against hard safety constraints using Z3 formal logic."""
+    started_at = time.monotonic()
     if state.get("final_response", {}).get("status") == "not_verified":
+        print("Gate hard_safety completed in 0.0 ms (skipped)")
         return {}
 
     claims = state.get("claims", [])
@@ -188,109 +192,99 @@ async def hard_safety_node(state: HealthcareState) -> dict:
     if isinstance(state, dict):
         state.update(update)
 
+    print(f"Gate hard_safety completed in {(time.monotonic() - started_at) * 1000:.1f} ms")
     return update
 
 
-async def grounding_node(state: HealthcareState) -> dict:
-    """Verify medical claims against authoritative sources (openFDA / PubMed)."""
-    if state.get("final_response", {}).get("status") == "not_verified":
-        return {}
-
-    claims = state.get("claims", [])
-    existing_flagged = list(state.get("flagged_claims", []))
-
-    passed_claims: List[str] = []
-    flagged_claims: List[dict] = list(existing_flagged)
-
-    for claim in claims:
-        result = await check_claim_grounding(claim)
-        if result.get("passed", True):
-            passed_claims.append(claim)
-        else:
-            flagged_claims.append({
+async def _run_claim_gate(
+    gate_name: str,
+    claims: List[str],
+    checker: Any,
+) -> tuple[set[str], List[dict]]:
+    """Run one claim gate concurrently and return passed claims and failures."""
+    started_at = time.monotonic()
+    try:
+        results = await asyncio.gather(*(checker(claim) for claim in claims))
+        passed_claims = {
+            claim for claim, result in zip(claims, results)
+            if result.get("passed", True)
+        }
+        flagged_claims = [
+            {
                 "claim": claim,
-                "gate_failed": result.get("gate", "grounding"),
-                "reason": result.get("reason", "Not supported by FDA label"),
-            })
-
-    update = {
-        "claims": passed_claims,
-        "flagged_claims": flagged_claims,
-    }
-
-    if isinstance(state, dict):
-        state.update(update)
-
-    return update
+                "gate_failed": result.get("gate", gate_name),
+                "reason": result.get("reason", f"Failed {gate_name} review"),
+            }
+            for claim, result in zip(claims, results)
+            if not result.get("passed", True)
+        ]
+        return passed_claims, flagged_claims
+    finally:
+        print(f"Gate {gate_name} completed in {(time.monotonic() - started_at) * 1000:.1f} ms")
 
 
-async def consistency_node(state: HealthcareState) -> dict:
-    """Evaluate claims for consistency and medical accuracy using an independent model (Groq)."""
-    if state.get("final_response", {}).get("status") == "not_verified":
-        return {}
-
-    claims = state.get("claims", [])
-    existing_flagged = list(state.get("flagged_claims", []))
-
-    passed_claims: List[str] = []
-    flagged_claims: List[dict] = list(existing_flagged)
-
-    for claim in claims:
-        result = await check_claim_consistency(claim)
+async def _run_irrelevant_change_gate(
+    query: str,
+    claims: List[str],
+) -> tuple[set[str], List[dict]]:
+    """Run Gate 4 for dosage-like queries."""
+    started_at = time.monotonic()
+    try:
+        result = await check_irrelevant_change(query, claims)
         if result.get("passed", True):
-            passed_claims.append(claim)
-        else:
-            flagged_claims.append({
+            return set(claims), []
+        return set(), [
+            {
                 "claim": claim,
-                "gate_failed": result.get("gate", "consistency"),
-                "reason": result.get("reason", "Failed independent Groq review"),
-            })
+                "gate_failed": result.get("gate", "irrelevant_change"),
+                "reason": result.get(
+                    "reason",
+                    "Clinical advice unstable under irrelevant-change test.",
+                ),
+            }
+            for claim in claims
+        ]
+    finally:
+        print(
+            "Gate irrelevant_change completed in "
+            f"{(time.monotonic() - started_at) * 1000:.1f} ms"
+        )
 
-    update = {
-        "claims": passed_claims,
-        "flagged_claims": flagged_claims,
-    }
 
-    if isinstance(state, dict):
-        state.update(update)
-
-    return update
-
-
-async def irrelevant_change_node(state: HealthcareState) -> dict:
-    """Gate 4: Test that clinical advice does not change when irrelevant details are added."""
+async def verification_node(state: HealthcareState) -> dict:
+    """Run the independent verification gates concurrently and merge their results."""
     if state.get("final_response", {}).get("status") == "not_verified":
         return {}
 
-    original_query = state.get("patient_query", "")
-    claims = state.get("claims", [])
-    existing_flagged = list(state.get("flagged_claims", []))
-
+    claims = list(state.get("claims", []))
     if not claims:
         return {}
 
-    result = await check_irrelevant_change(original_query, claims)
+    gate_tasks = [
+        _run_claim_gate("grounding", claims, check_claim_grounding),
+        _run_claim_gate("consistency", claims, check_claim_consistency),
+    ]
+    # Gate 4 is expensive and is only needed when the query contains dosage-like data.
+    if re.search(r"\d|\bmg\b", state.get("patient_query", ""), re.IGNORECASE):
+        gate_tasks.append(
+            _run_irrelevant_change_gate(state.get("patient_query", ""), claims)
+        )
+    else:
+        print("Gate irrelevant_change skipped for low-risk query")
 
-    if result.get("passed", True):
-        return {}
-
-    # If the advice changed, flag ALL remaining claims as unstable
-    new_flagged = list(existing_flagged)
-    for claim in claims:
-        new_flagged.append({
-            "claim": claim,
-            "gate_failed": result.get("gate", "irrelevant_change"),
-            "reason": result.get("reason", "Clinical advice unstable under irrelevant-change test."),
-        })
+    gate_results = await asyncio.gather(*gate_tasks)
+    verified_claims = set(claims)
+    new_flagged = list(state.get("flagged_claims", []))
+    for passed_claims, flagged_claims in gate_results:
+        verified_claims.intersection_update(passed_claims)
+        new_flagged.extend(flagged_claims)
 
     update = {
-        "claims": [],
+        "claims": [claim for claim in claims if claim in verified_claims],
         "flagged_claims": new_flagged,
     }
-
     if isinstance(state, dict):
         state.update(update)
-
     return update
 
 

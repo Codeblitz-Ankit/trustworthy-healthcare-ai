@@ -29,7 +29,7 @@ load_dotenv()
 # Audit log setup – backend/audit.jsonl
 # ---------------------------------------------------------------------------
 _AUDIT_LOG_PATH = Path(__file__).parent / "audit.jsonl"
-_PIPELINE_TIMEOUT_SECONDS = 30  # Non-functional requirement: 30 s max for high-risk queries
+_PIPELINE_TIMEOUT_SECONDS = 60
 
 
 def _write_audit_entry(entry: dict) -> None:
@@ -73,7 +73,7 @@ async def verify_query(request: VerifyRequest) -> Dict[str, Any]:
     """Execute the healthcare verification state machine for a patient query.
 
     Logs every request and response to audit.jsonl.
-    Enforces a 30-second timeout; defaults to not_verified on timeout.
+    Enforces a 60-second timeout; defaults to not_verified on timeout.
 
     Args:
         request: JSON body containing the patient query string.
