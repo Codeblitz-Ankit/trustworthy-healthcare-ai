@@ -5,3 +5,5 @@
 {"timestamp": "2026-11-14T04:42:23.712306+00:00", "query": "How much acetaminophen should I take at once?", "status": "not_verified", "review_required": true, "latency_ms": 14027.4}
 {"timestamp": "2026-11-14T04:43:30.446769+00:00", "query": "What is amoxicillin used for?", "status": "not_verified", "review_required": false, "latency_ms": 9371.2}
 {"timestamp": "2026-11-14T05:10:06.093381+00:00", "query": "What is amoxicillin used for?", "status": "verified", "review_required": false, "latency_ms": 17742.3}
+{"timestamp": "2026-11-14T05:57:56.933646+00:00", "query": "What are the common side effects of ibuprofen?", "status": "not_verified", "review_required": true, "latency_ms": 30002.0}
+{"timestamp": "2026-11-14T05:59:55.777462+00:00", "query": "My social security number is 123-45-6789 and I have a headache, what should I take?", "status": "not_verified", "review_required": true, "latency_ms": 30001.3}

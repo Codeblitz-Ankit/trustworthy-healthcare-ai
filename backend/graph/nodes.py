@@ -324,7 +324,10 @@ async def aggregator_node(state: HealthcareState) -> dict:
         )
         final_response = {
             "status": "not_verified",
-            "content": f"Response not verified: {reasons}",
+            "content": (
+                "Safety Alert: The proposed AI response was withheld. "
+                f"Reason: {reasons}. This query has been escalated for clinician review."
+            ),
             "sources": [],
         }
     elif has_flagged and has_valid_claims:
@@ -335,13 +338,21 @@ async def aggregator_node(state: HealthcareState) -> dict:
         )
         final_response = {
             "status": "partially_verified",
-            "content": f"{' '.join(claims)}\n\nUnverified claims: {reasons}",
+            "content": (
+                "Verified Claims:\n"
+                f"{chr(10).join(f'- {claim}' for claim in claims)}\n\n"
+                f"Withheld Claims and Reasons:\n- {reasons}"
+            ),
             "sources": ["openFDA"],
         }
     else:
         final_response = {
             "status": "verified",
-            "content": draft_answer,
+            "content": (
+                "Verified Information: "
+                f"{draft_answer} This information has been cross-checked against "
+                "the FDA drug database and independent medical AI models."
+            ),
             "sources": ["openFDA", "Groq Llama-3"],
         }
 

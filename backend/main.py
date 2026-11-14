@@ -6,7 +6,6 @@ Includes audit logging middleware (audit.jsonl) and end-to-end latency tracking.
 
 import asyncio
 import json
-import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path

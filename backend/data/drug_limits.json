@@ -1,0 +1,17 @@
+{
+  "acetaminophen": {
+    "aliases": ["acetaminophen", "paracetamol"],
+    "max_single_mg": 1000,
+    "max_daily_mg": 4000
+  },
+  "ibuprofen": {
+    "aliases": ["ibuprofen"],
+    "max_single_mg": 400,
+    "max_daily_mg": 1200
+  },
+  "aspirin": {
+    "aliases": ["aspirin", "acetylsalicylic acid"],
+    "max_single_mg": null,
+    "max_daily_mg": 4000
+  }
+}

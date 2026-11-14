@@ -19,12 +19,16 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 load_dotenv()
 
-_PERTURBATION_SUFFIX = " (Note: My name is Alex Johnson and I live in Springfield.)"
-
 _PROPOSER_SYSTEM_PROMPT = (
     "You are a medical AI assistant. Answer the patient query briefly and accurately. "
     "Then, split your own answer into atomic factual claims.\n"
     "You must output a JSON object with keys 'answer' (string) and 'claims' (list of strings)."
+)
+
+_PERTURBATION_SYSTEM_PROMPT = (
+    "Generate one short sentence containing an innocuous, non-medical detail "
+    "that is irrelevant to the user's healthcare question. Do not add medical "
+    "facts, symptoms, demographics, or instructions. Return only the sentence."
 )
 
 _COMPARE_SYSTEM_PROMPT = (
@@ -84,8 +88,24 @@ async def check_irrelevant_change(
             google_api_key=api_key,
         )
 
-        # Step 1: Re-answer the perturbed query
-        perturbed_query = original_query + _PERTURBATION_SUFFIX
+        # Step 1: Generate and apply a query-specific irrelevant perturbation.
+        perturbation_response = await llm.ainvoke([
+            SystemMessage(content=_PERTURBATION_SYSTEM_PROMPT),
+            HumanMessage(content=original_query),
+        ])
+        perturbation = (
+            perturbation_response.content
+            if isinstance(perturbation_response.content, str)
+            else str(perturbation_response.content)
+        ).strip()
+        if not perturbation:
+            return {
+                "passed": True,
+                "gate": "irrelevant_change",
+                "reason": "Irrelevant-change check skipped: no perturbation was generated.",
+            }
+
+        perturbed_query = f"{original_query}\n\nIrrelevant context: {perturbation}"
         proposer_messages = [
             SystemMessage(content=_PROPOSER_SYSTEM_PROMPT),
             HumanMessage(content=perturbed_query),

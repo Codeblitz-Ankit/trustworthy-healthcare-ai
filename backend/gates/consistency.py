@@ -5,7 +5,6 @@ hosted on Groq to evaluate factual consistency and medical accuracy.
 """
 
 import os
-from typing import Any, Dict
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 

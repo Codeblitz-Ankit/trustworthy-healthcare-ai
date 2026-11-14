@@ -5,10 +5,9 @@ grounded in trusted sources (such as OpenFDA drug labeling) using Natural Langua
 """
 
 import os
-from typing import Any, Dict, Optional
+import re
 from dotenv import load_dotenv
 import httpx
-import re
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 load_dotenv()
@@ -30,11 +29,28 @@ async def check_claim_grounding(claim_text: str) -> dict:
 
     load_dotenv()
 
-    # Use a medicine name explicitly present in this claim. Claims that do not
-    # name a medicine are general knowledge and do not need an FDA lookup.
-    stop_words = {"The", "This", "It", "A", "An", "Examples", "Common"}
-    match = re.search(r"\b([A-Z][A-Za-z0-9-]*)\b", claim_text)
-    drug_name = match.group(1) if match and match.group(1) not in stop_words else None
+    # Extract a candidate medicine from the claim without maintaining a drug list.
+    stop_words = {
+        "a", "an", "and", "are", "adults", "can", "common", "does", "dose",
+        "for", "from", "how", "i", "is", "it", "much", "of", "single",
+        "should", "the", "this", "to", "typical", "used", "with",
+    }
+    candidates = re.findall(r"\b[A-Za-z][A-Za-z0-9-]*\b", claim_text)
+    drug_name = next(
+        (
+            candidate for candidate in candidates
+            if candidate.casefold() not in stop_words
+            and (
+                candidate[0].isupper()
+                or re.search(
+                    r"\b(?:of|take|taking|using|use|about)\s+" + re.escape(candidate),
+                    claim_text,
+                    re.I,
+                )
+            )
+        ),
+        None,
+    )
     if not drug_name:
         return GENERAL_KNOWLEDGE.copy()
     url = "https://api.fda.gov/drug/label.json"
